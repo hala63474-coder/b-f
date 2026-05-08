@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepVerify — AI Deepfake Detector</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Outfit:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --neon:    #00ff88;
+  --neon2:   #00d4ff;
+  --neon3:   #ff3b6b;
+  --bg:      #050a0e;
+  --bg2:     #080f14;
+  --bg3:     #0d1a22;
+  --panel:   #0b1720;
+  --panel2:  #0f1f2e;
+  --border:  rgba(0,255,136,0.18);
+  --border2: rgba(0,212,255,0.14);
+  --text:    #d6f0e8;
+  --muted:   #3d6e5a;
+  --muted2:  #5a9e82;
+  --mono:    'Space Mono', monospace;
+  --body:    'Outfit', sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{font-family:var(--body);background:var(--bg);color:var(--text);overflow-x:hidden;min-height:100vh;}
+
+/* Scanlines */
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,255,136,0.012) 3px,rgba(0,255,136,0.012) 4px);pointer-events:none;z-index:9000;}
+
+/* Grid bg */
+.grid-bg{position:fixed;inset:0;background-image:linear-gradient(rgba(0,255,136,0.05) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,136,0.05) 1px,transparent 1px);background-size:48px 48px;pointer-events:none;z-index:0;}
+
+/* Corners */
+.corner{position:fixed;width:28px;height:28px;z-index:50;pointer-events:none;}
+.corner.tl{top:14px;left:14px;border-top:2px solid var(--neon);border-left:2px solid var(--neon);}
+.corner.tr{top:14px;right:14px;border-top:2px solid var(--neon);border-right:2px solid var(--neon);}
+.corner.bl{bottom:14px;left:14px;border-bottom:2px solid var(--neon);border-left:2px solid var(--neon);}
+.corner.br{bottom:14px;right:14px;border-bottom:2px solid var(--neon);border-right:2px solid var(--neon);}
+
+/* ═══════ LANDING ═══════ */
+#landing{position:relative;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;z-index:1;}
+
+.glow-blob{position:absolute;border-radius:50%;filter:blur(100px);pointer-events:none;}
+.blob-a{width:500px;height:500px;background:rgba(0,255,136,0.07);top:-120px;right:-80px;animation:blobDrift 12s ease-in-out infinite;}
+.blob-b{width:400px;height:400px;background:rgba(0,212,255,0.06);bottom:-100px;left:-60px;animation:blobDrift 15s ease-in-out infinite reverse;}
+.blob-c{width:260px;height:260px;background:rgba(0,255,136,0.05);bottom:30%;right:10%;animation:blobDrift 9s ease-in-out infinite 3s;}
+@keyframes blobDrift{0%,100%{transform:translateY(0) scale(1);}50%{transform:translateY(-40px) scale(1.06);}}
+
+.particle{position:absolute;border-radius:50%;animation:particleRise linear infinite;opacity:0;pointer-events:none;}
+@keyframes particleRise{0%{transform:translateY(110vh);opacity:0;}8%{opacity:0.7;}92%{opacity:0.5;}100%{transform:translateY(-5vh);opacity:0;}}
+
+.hero{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;text-align:center;padding:2rem;max-width:780px;width:100%;}
+
+/* Robot visual */
+.ai-visual{position:relative;width:220px;height:220px;margin-bottom:2.5rem;cursor:pointer;flex-shrink:0;}
+.ai-visual:hover .robot-body{filter:drop-shadow(0 0 22px rgba(0,255,136,0.7));}
+
+.orbit-ring{position:absolute;border-radius:50%;border:1px solid;animation:spinR linear infinite;}
+.or1{width:220px;height:220px;top:0;left:0;border-color:rgba(0,255,136,0.2);animation-duration:14s;}
+.or2{width:170px;height:170px;top:25px;left:25px;border-color:rgba(0,212,255,0.18);animation-duration:9s;animation-direction:reverse;}
+.or3{width:124px;height:124px;top:48px;left:48px;border-color:rgba(0,255,136,0.12);animation-duration:6s;}
+@keyframes spinR{to{transform:rotate(360deg);}}
+
+.odot{position:absolute;width:8px;height:8px;border-radius:50%;top:-4px;left:calc(50% - 4px);}
+.odot1{background:var(--neon);box-shadow:0 0 8px var(--neon);animation:spinR 14s linear infinite;transform-origin:4px 114px;}
+.odot2{background:var(--neon2);box-shadow:0 0 8px var(--neon2);animation:spinR 9s linear infinite reverse;transform-origin:4px 89px;}
+.odot3{background:var(--neon);opacity:0.7;animation:spinR 6s linear infinite;transform-origin:4px 66px;}
+
+.robot-body{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:96px;height:96px;transition:filter 0.3s;animation:robotFloat 3s ease-in-out infinite;}
+@keyframes robotFloat{0%,100%{transform:translate(-50%,-50%) translateY(0);}50%{transform:translate(-50%,-50%) translateY(-8px);}}
+
+.robot-ping{position:absolute;top:50%;left:50%;width:96px;height:96px;transform:translate(-50%,-50%);border-radius:50%;border:1px solid rgba(0,255,136,0.4);animation:pingOut 2.4s ease-out infinite;}
+.robot-ping:nth-child(7){animation-delay:0.8s;border-color:rgba(0,212,255,0.3);}
+.robot-ping:nth-child(8){animation-delay:1.6s;}
+@keyframes pingOut{0%{transform:translate(-50%,-50%) scale(1);opacity:1;}100%{transform:translate(-50%,-50%) scale(2.2);opacity:0;}}
+
+.status-badge{position:absolute;bottom:-10px;left:50%;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:4px 14px;font-family:var(--mono);font-size:10px;color:var(--neon);white-space:nowrap;letter-spacing:1px;animation:blinkAnim 1.8s step-end infinite;}
+@keyframes blinkAnim{0%,100%{opacity:1;}50%{opacity:0.35;}}
+
+.hero-label{font-family:var(--mono);font-size:11px;letter-spacing:3px;color:var(--muted2);text-transform:uppercase;margin-bottom:1rem;opacity:0;animation:riseUp 0.6s 0.1s ease forwards;}
+.hero-title{font-size:clamp(2.6rem,6vw,4.4rem);font-weight:900;line-height:1.05;letter-spacing:-2px;margin-bottom:1.2rem;opacity:0;animation:riseUp 0.6s 0.2s ease forwards;}
+.nt{background:linear-gradient(120deg,var(--neon) 0%,var(--neon2) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.hero-sub{font-size:1.05rem;font-weight:300;color:var(--muted2);line-height:1.8;max-width:500px;margin-bottom:2rem;opacity:0;animation:riseUp 0.6s 0.3s ease forwards;}
+
+.tap-prompt{
+  display:flex;align-items:center;gap:10px;
+  font-family:var(--mono);font-size:1rem;letter-spacing:2px;
+  color:var(--muted2);cursor:pointer;
+  margin-top:0.5rem;
+  opacity:0;animation:riseUp 0.6s 0.4s ease forwards;
+  transition:color 0.2s;
+  user-select:none;
+  position:relative;
+}
+.tap-prompt:hover{color:var(--neon);}
+.tap-prompt:hover .tap-arrow{animation:arrowBounce 0.4s ease infinite alternate;}
+.tap-arrow{
+  font-size:1.3rem;color:var(--neon);
+  display:inline-block;
+  animation:arrowBounce 0.8s ease-in-out infinite alternate;
+}
+@keyframes arrowBounce{0%{transform:translateY(0);}100%{transform:translateY(-6px);}}
+.tap-text{color:var(--neon);text-shadow:0 0 8px rgba(0,255,136,0.5);}
+.tap-cursor{
+  color:var(--neon);font-size:1.1rem;
+  animation:blinkAnim 0.7s step-end infinite;
+}
+/* Glitch on hover over robot */
+.ai-visual:hover .robot-body{
+  filter:drop-shadow(0 0 22px rgba(0,255,136,0.7));
+  animation:robotFloat 3s ease-in-out infinite, glitchShake 0.15s ease infinite;
+}
+@keyframes glitchShake{
+  0%{transform:translate(-50%,-50%);}
+  20%{transform:translate(-52%,-50%);}
+  40%{transform:translate(-48%,-50%);}
+  60%{transform:translate(-50%,-52%);}
+  80%{transform:translate(-50%,-48%);}
+  100%{transform:translate(-50%,-50%);}
+}
+/* Scan-me overlay on robot hover */
+.ai-visual::after{
+  content:'[ SCAN ME ]';
+  position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  font-family:var(--mono);font-size:11px;letter-spacing:2px;
+  color:var(--neon);
+  background:rgba(5,10,14,0.85);
+  border:1px solid var(--neon);
+  padding:5px 10px;border-radius:3px;
+  opacity:0;pointer-events:none;
+  transition:opacity 0.2s;
+  white-space:nowrap;
+  text-shadow:0 0 10px var(--neon);
+  z-index:10;
+}
+.ai-visual:hover::after{opacity:1;}
+
+.stats-row{display:flex;gap:2.5rem;align-items:center;margin-top:2.5rem;opacity:0;animation:riseUp 0.6s 0.5s ease forwards;}
+.stat-item{text-align:center;}
+.stat-num{font-family:var(--mono);font-size:1.5rem;font-weight:700;background:linear-gradient(120deg,var(--neon),var(--neon2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.stat-lbl{font-size:0.72rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-top:2px;}
+.stat-div{width:1px;height:36px;background:linear-gradient(to bottom,transparent,var(--border),transparent);}
+
+@keyframes riseUp{from{opacity:0;transform:translateY(18px);}to{opacity:1;transform:translateY(0);}}
+
+/* ═══════ APP ═══════ */
+#app{display:none;}
+
+.app-nav{display:flex;align-items:center;justify-content:space-between;padding:0.85rem 2rem;background:rgba(5,10,14,0.88);backdrop-filter:blur(16px);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;}
+.nav-logo{font-family:var(--mono);font-size:1.05rem;font-weight:700;background:linear-gradient(120deg,var(--neon),var(--neon2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.nav-pill{font-family:var(--mono);font-size:0.7rem;letter-spacing:1.5px;color:var(--neon);border:1px solid var(--border);background:rgba(0,255,136,0.05);padding:0.3rem 0.8rem;border-radius:3px;text-transform:uppercase;}
+.nav-back{background:transparent;border:1px solid var(--border);color:var(--muted2);font-family:var(--mono);font-size:0.72rem;padding:0.3rem 0.8rem;border-radius:3px;cursor:pointer;transition:all 0.2s;letter-spacing:0.5px;}
+.nav-back:hover{border-color:var(--neon);color:var(--neon);}
+
+.app-page{display:none;}
+.app-page.active{display:flex;}
+
+/* Upload */
+#ap-upload{min-height:calc(100vh - 57px);flex-direction:column;align-items:center;justify-content:center;padding:3rem 1.5rem;gap:1.8rem;position:relative;}
+#ap-upload::before{content:'';position:absolute;inset:0;background-image:linear-gradient(rgba(0,255,136,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,136,0.04) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;}
+
+.page-label{font-family:var(--mono);font-size:10px;letter-spacing:3px;color:var(--muted);text-transform:uppercase;}
+.page-title{font-size:clamp(1.6rem,3vw,2.4rem);font-weight:800;letter-spacing:-1px;text-align:center;}
+.page-title .nt{display:inline;}
+.page-sub{font-size:0.9rem;color:var(--muted2);font-weight:300;}
+
+.upload-box{width:100%;max-width:520px;background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden;position:relative;z-index:1;}
+.upload-box::before,.upload-box::after{content:'';position:absolute;width:14px;height:14px;pointer-events:none;z-index:5;}
+.upload-box::before{top:0;left:0;border-top:2px solid var(--neon);border-left:2px solid var(--neon);}
+.upload-box::after{bottom:0;right:0;border-bottom:2px solid var(--neon);border-right:2px solid var(--neon);}
+
+.tabs{display:flex;border-bottom:1px solid var(--border);background:var(--bg2);}
+.tab-btn{flex:1;padding:0.85rem;background:transparent;border:none;color:var(--muted);font-family:var(--body);font-size:0.88rem;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:7px;letter-spacing:0.3px;}
+.tab-btn.active{background:var(--panel);color:var(--neon);border-bottom:2px solid var(--neon);margin-bottom:-1px;}
+
+.drop-zone{padding:2.5rem 2rem;text-align:center;cursor:pointer;position:relative;transition:all 0.2s;}
+.drop-zone.dragover{background:rgba(0,255,136,0.04);}
+.drop-zone input[type="file"]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+
+.drop-icon{width:64px;height:64px;border-radius:50%;background:rgba(0,255,136,0.06);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;margin:0 auto 1.2rem;transition:all 0.3s;}
+.drop-zone:hover .drop-icon,.drop-zone.dragover .drop-icon{background:rgba(0,255,136,0.12);box-shadow:0 0 20px rgba(0,255,136,0.2);}
+.drop-icon svg{color:var(--neon);}
+.drop-zone h3{font-size:0.95rem;font-weight:500;margin-bottom:0.4rem;}
+.drop-zone p{font-size:0.82rem;color:var(--muted);line-height:1.7;}
+.drop-zone span{color:var(--muted2);}
+
+.file-pill{display:none;align-items:center;gap:8px;background:rgba(0,255,136,0.06);border:1px solid var(--border);border-radius:4px;padding:0.5rem 0.9rem;margin:0.8rem 0 0;font-size:0.82rem;color:var(--neon);font-family:var(--mono);}
+.file-pill.show{display:inline-flex;}
+
+.url-zone{padding:1.8rem;display:none;flex-direction:column;gap:0.8rem;}
+.url-zone.active{display:flex;}
+.url-row{display:flex;gap:8px;}
+.url-row input{flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:0.75rem 1rem;color:var(--text);font-family:var(--mono);font-size:0.82rem;outline:none;transition:border-color 0.2s;direction:ltr;}
+.url-row input:focus{border-color:var(--neon);box-shadow:0 0 12px rgba(0,255,136,0.1);}
+.url-row input::placeholder{color:var(--muted);}
+.url-hint{font-size:0.78rem;color:var(--muted);font-family:var(--mono);}
+
+.btn-primary{width:100%;padding:0.9rem;background:linear-gradient(120deg,var(--neon),var(--neon2));color:var(--bg);border:none;border-radius:4px;font-family:var(--body);font-size:0.95rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all 0.2s;position:relative;overflow:hidden;letter-spacing:0.3px;}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 0 28px rgba(0,255,136,0.35);}
+.btn-primary:disabled{opacity:0.3;cursor:not-allowed;transform:none;box-shadow:none;}
+
+.btn-sm{padding:0.65rem 1.1rem;white-space:nowrap;flex-shrink:0;background:transparent;border:1px solid var(--border);color:var(--neon);border-radius:4px;font-family:var(--mono);font-size:0.8rem;cursor:pointer;transition:all 0.2s;}
+.btn-sm:hover{background:rgba(0,255,136,0.08);border-color:var(--neon);}
+
+/* Loading */
+#ap-loading{min-height:calc(100vh - 57px);flex-direction:column;align-items:center;justify-content:center;gap:2.5rem;padding:2rem;}
+.scan-visual{position:relative;width:130px;height:130px;}
+.scan-ring{position:absolute;border-radius:50%;border:2px solid;animation:spinR linear infinite;}
+.sr1{width:130px;height:130px;top:0;left:0;border-color:rgba(0,255,136,0.35);animation-duration:7s;}
+.sr2{width:88px;height:88px;top:21px;left:21px;border-color:rgba(0,212,255,0.3);animation-duration:4.5s;animation-direction:reverse;}
+.scan-core{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:46px;height:46px;border-radius:50%;background:linear-gradient(120deg,var(--neon),var(--neon2));display:flex;align-items:center;justify-content:center;animation:corePulse 2s ease-in-out infinite;}
+.scan-core svg{color:var(--bg);}
+@keyframes corePulse{0%,100%{box-shadow:0 0 16px rgba(0,255,136,0.4);}50%{box-shadow:0 0 40px rgba(0,255,136,0.7);}}
+.scan-line{position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--neon),transparent);animation:scanMove 2s ease-in-out infinite;}
+@keyframes scanMove{0%,100%{top:15%;opacity:0.6;}50%{top:85%;opacity:1;}}
+.loading-title{font-family:var(--mono);font-size:1.2rem;font-weight:700;text-align:center;color:var(--neon);letter-spacing:1px;}
+.loading-sub{color:var(--muted);font-size:0.85rem;text-align:center;font-family:var(--mono);margin-top:4px;}
+.steps{display:flex;flex-direction:column;gap:8px;width:100%;max-width:360px;}
+.step{display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--panel);border:1px solid var(--border);border-radius:4px;font-size:0.85rem;color:var(--muted);transition:all 0.4s;font-family:var(--mono);}
+.step.active{border-color:var(--neon);color:var(--text);background:rgba(0,255,136,0.05);}
+.step.done{border-color:var(--border2);color:var(--neon2);background:rgba(0,212,255,0.04);}
+.step-ico{width:22px;height:22px;border-radius:50%;border:1px solid rgba(0,255,136,0.3);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;color:var(--muted);transition:all 0.3s;}
+.step.active .step-ico{border-color:var(--neon);color:var(--neon);animation:pulse 1s infinite;}
+.step.done .step-ico{background:var(--neon2);border-color:var(--neon2);color:var(--bg);}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
+
+/* Result */
+#ap-result{min-height:calc(100vh - 57px);flex-direction:column;align-items:center;justify-content:center;padding:3rem 1.5rem;gap:1.5rem;}
+.result-card{width:100%;max-width:500px;background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden;animation:riseUp 0.5s ease both;position:relative;}
+.result-card::before,.result-card::after{content:'';position:absolute;width:14px;height:14px;pointer-events:none;z-index:5;}
+.result-card::before{top:0;left:0;border-top:2px solid var(--neon);border-left:2px solid var(--neon);}
+.result-card::after{bottom:0;right:0;border-bottom:2px solid var(--neon);border-right:2px solid var(--neon);}
+.result-top{padding:2rem;text-align:center;border-bottom:1px solid var(--border);background:var(--bg2);}
+.verdict-badge{display:inline-flex;align-items:center;gap:10px;padding:0.6rem 1.6rem;border-radius:3px;font-family:var(--mono);font-size:1.1rem;font-weight:700;margin-bottom:0.7rem;letter-spacing:1px;text-transform:uppercase;}
+.v-real{background:rgba(0,255,136,0.08);border:1px solid rgba(0,255,136,0.4);color:var(--neon);}
+.v-fake{background:rgba(255,59,107,0.08);border:1px solid rgba(255,59,107,0.4);color:var(--neon3);}
+.result-fname{font-size:0.78rem;color:var(--muted);font-family:var(--mono);margin-top:4px;}
+.result-body{padding:1.5rem 2rem;display:flex;flex-direction:column;gap:1.2rem;}
+.conf-row{display:flex;justify-content:space-between;font-size:0.82rem;color:var(--muted);margin-bottom:6px;font-family:var(--mono);}
+.conf-val{font-weight:700;color:var(--text);}
+.conf-track{height:8px;background:var(--bg2);border-radius:2px;overflow:hidden;border:1px solid var(--border);}
+.conf-fill{height:100%;border-radius:2px;transition:width 1s ease;}
+.fill-real{background:linear-gradient(90deg,var(--neon),var(--neon2));}
+.fill-fake{background:linear-gradient(90deg,var(--neon3),#ff8fab);}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.d-item{background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:12px 14px;}
+.d-lbl{font-size:0.7rem;color:var(--muted);margin-bottom:4px;font-family:var(--mono);letter-spacing:0.5px;text-transform:uppercase;}
+.d-val{font-size:0.92rem;font-weight:600;color:var(--text);font-family:var(--mono);}
+.result-actions{display:flex;gap:10px;padding:0 2rem 1.5rem;}
+.btn-out{flex:1;padding:0.8rem;background:transparent;border:1px solid var(--border);border-radius:4px;color:var(--muted2);font-family:var(--mono);font-size:0.82rem;cursor:pointer;transition:all 0.2s;letter-spacing:0.5px;}
+.btn-out:hover{border-color:var(--neon);color:var(--neon);}
+.btn-grad{flex:1;padding:0.8rem;border:none;border-radius:4px;background:linear-gradient(120deg,var(--neon),var(--neon2));color:var(--bg);font-family:var(--mono);font-size:0.82rem;cursor:pointer;transition:opacity 0.2s;font-weight:700;letter-spacing:0.5px;}
+.btn-grad:hover{opacity:0.85;}
+
+.err-card{width:100%;max-width:420px;background:rgba(255,59,107,0.06);border:1px solid rgba(255,59,107,0.25);border-radius:8px;padding:2rem;text-align:center;animation:riseUp 0.5s ease both;}
+.err-card h3{color:var(--neon3);font-family:var(--mono);font-size:1rem;margin-bottom:0.6rem;letter-spacing:1px;}
+.err-card p{color:var(--muted2);font-size:0.85rem;line-height:1.7;margin-bottom:1.2rem;}
+
+@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+<div class="corner tl"></div>
+<div class="corner tr"></div>
+<div class="corner bl"></div>
+<div class="corner br"></div>
+
+<!-- LANDING -->
+<div id="landing">
+  <div class="glow-blob blob-a"></div>
+  <div class="glow-blob blob-b"></div>
+  <div class="glow-blob blob-c"></div>
+
+  <div class="hero">
+    <!-- AI Robot — click to enter -->
+    <div class="ai-visual" onclick="goToApp()" title="Click to start">
+      <div class="orbit-ring or1"></div>
+      <div class="orbit-ring or2"></div>
+      <div class="orbit-ring or3"></div>
+      <div class="odot odot1"></div>
+      <div class="odot odot2"></div>
+      <div class="odot odot3"></div>
+      <div class="robot-ping"></div>
+      <div class="robot-ping"></div>
+      <div class="robot-ping"></div>
+      <div class="robot-body">
+        <svg viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="22" y="18" width="52" height="38" rx="8" fill="#0b1720" stroke="url(#ng)" stroke-width="1.5"/>
+          <rect x="29" y="28" width="14" height="10" rx="3" fill="#050a0e"/>
+          <rect x="53" y="28" width="14" height="10" rx="3" fill="#050a0e"/>
+          <rect x="31" y="30" width="10" height="6" rx="2" fill="url(#ng)"/>
+          <rect x="55" y="30" width="10" height="6" rx="2" fill="url(#nb)"/>
+          <line x1="31" y1="33" x2="41" y2="33" stroke="#050a0e" stroke-width="1" opacity="0.6"/>
+          <line x1="55" y1="33" x2="65" y2="33" stroke="#050a0e" stroke-width="1" opacity="0.6"/>
+          <rect x="34" y="44" width="28" height="5" rx="2.5" fill="#050a0e"/>
+          <rect x="36" y="45.5" width="4" height="2" rx="1" fill="url(#ng)"/>
+          <rect x="42" y="45.5" width="4" height="2" rx="1" fill="url(#ng)" opacity="0.6"/>
+          <rect x="48" y="45.5" width="4" height="2" rx="1" fill="url(#ng)"/>
+          <rect x="54" y="45.5" width="4" height="2" rx="1" fill="url(#nb)" opacity="0.7"/>
+          <line x1="48" y1="18" x2="48" y2="8" stroke="url(#ng)" stroke-width="1.5"/>
+          <circle cx="48" cy="6" r="3" fill="url(#ng)"/>
+          <circle cx="48" cy="6" r="5" stroke="url(#ng)" stroke-width="0.5" opacity="0.4"/>
+          <rect x="42" y="56" width="12" height="8" rx="2" fill="#0b1720" stroke="url(#ng)" stroke-width="1"/>
+          <rect x="18" y="64" width="60" height="26" rx="6" fill="#0b1720" stroke="url(#ng)" stroke-width="1.5"/>
+          <rect x="28" y="69" width="40" height="16" rx="3" fill="#050a0e"/>
+          <circle cx="35" cy="75" r="3" fill="url(#ng)"/>
+          <circle cx="35" cy="75" r="5" stroke="url(#ng)" stroke-width="0.5" opacity="0.3"/>
+          <rect x="41" y="72" width="18" height="2" rx="1" fill="#0d2a1e"/>
+          <rect x="41" y="72" width="12" height="2" rx="1" fill="url(#ng)" opacity="0.7"/>
+          <rect x="41" y="76" width="18" height="2" rx="1" fill="#0d1f2e"/>
+          <rect x="41" y="76" width="7" height="2" rx="1" fill="url(#nb)" opacity="0.7"/>
+          <rect x="41" y="80" width="18" height="2" rx="1" fill="#0d1f2e"/>
+          <rect x="41" y="80" width="15" height="2" rx="1" fill="url(#ng)" opacity="0.5"/>
+          <circle cx="18" cy="72" r="5" fill="#0b1720" stroke="url(#ng)" stroke-width="1"/>
+          <circle cx="78" cy="72" r="5" fill="#0b1720" stroke="url(#nb)" stroke-width="1"/>
+          <defs>
+            <linearGradient id="ng" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#00ff88"/>
+              <stop offset="100%" stop-color="#00d4ff"/>
+            </linearGradient>
+            <linearGradient id="nb" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#00d4ff"/>
+              <stop offset="100%" stop-color="#00ff88"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <div class="status-badge">● SYSTEM ONLINE</div>
+    </div>
+
+    <h1 class="hero-title"><span class="nt">Real</span> or <span class="nt">Fake?</span></h1>
+
+    <!-- Creative tap prompt — no button, just vibes -->
+    <div class="tap-prompt" onclick="goToApp()">
+      <span class="tap-arrow">↑</span>
+      <span class="tap-text" id="tapText"></span>
+      <span class="tap-cursor">_</span>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <nav class="app-nav">
+    <div class="nav-logo">DeepVerify</div>
+    <div class="nav-pill">AI · Deepfake Detector</div>
+    <button class="nav-back" onclick="backToLanding()">← Back</button>
+  </nav>
+
+  <!-- Upload -->
+  <div id="ap-upload" class="app-page active">
+    <div class="page-label">Step 01 — Upload</div>
+    <h2 class="page-title">Analyze Your <span class="nt">Video</span></h2>
+    <p class="page-sub">Upload a file or paste a direct video URL</p>
+
+    <div class="upload-box">
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('file')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+          Upload File
+        </button>
+        <button class="tab-btn" onclick="switchTab('url')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          URL Link
+        </button>
+      </div>
+
+      <div class="drop-zone" id="drop-zone" ondragover="handleDragOver(event)" ondragleave="handleDragLeave()" ondrop="handleDrop(event)">
+        <input type="file" id="file-input" accept="video/*" onchange="handleFileSelect(event)">
+        <div class="drop-icon">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+            <rect x="2" y="2" width="20" height="20" rx="5"/>
+            <polygon points="10,8 16,12 10,16" fill="currentColor" stroke="none"/>
+          </svg>
+        </div>
+        <h3>Drop video here</h3>
+        <p>or click to browse from your device<br><span>MP4 · MOV · AVI — up to 500MB</span></p>
+        <div class="file-pill" id="file-pill">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>
+          <span id="file-name">—</span>
+        </div>
+      </div>
+
+      <div class="url-zone" id="url-zone">
+        <div class="url-row">
+          <input type="url" id="url-input" placeholder="https://example.com/video.mp4">
+          <button class="btn-sm" onclick="startAnalysis('url')">Analyze</button>
+        </div>
+        <div class="url-hint">// paste a direct video link</div>
+      </div>
+
+      <div style="padding:0 1.5rem 1.5rem;">
+        <button class="btn-primary" id="analyze-btn" onclick="startAnalysis('file')" disabled>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          Run Analysis
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div id="ap-loading" class="app-page">
+    <div class="scan-visual">
+      <div class="scan-ring sr1"></div>
+      <div class="scan-ring sr2"></div>
+      <div class="scan-line"></div>
+      <div class="scan-core">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      </div>
+    </div>
+    <div>
+      <div class="loading-title">ANALYZING...</div>
+      <div class="loading-sub">// scanning frame by frame</div>
+    </div>
+    <div class="steps">
+      <div class="step active" id="s1"><div class="step-ico">1</div><span>Uploading video to server</span></div>
+      <div class="step" id="s2"><div class="step-ico">2</div><span>Extracting & processing frames</span></div>
+      <div class="step" id="s3"><div class="step-ico">3</div><span>Running AI model inference</span></div>
+      <div class="step" id="s4"><div class="step-ico">4</div><span>Compiling final results</span></div>
+    </div>
+  </div>
+
+  <!-- Result -->
+  <div id="ap-result" class="app-page"></div>
+</div>
+
+<script>
+const API_URL='http://127.0.0.1:5000/predict';
+let currentFile=null,currentTab='file';
+
+// Typewriter glitch for tap prompt
+(function(){
+  const el = document.getElementById('tapText');
+  if(!el) return;
+  const phrases = [
+    'tap the robot to begin',
+    'click to scan your video',
+    'initiate deepfake detection',
+    'tap the robot to begin',
+  ];
+  const glitchChars = '!@#$%^&*<>?/\\|{}[]~';
+  let pi = 0, ci = 0, deleting = false, glitching = false;
+
+  function glitch(target, cb){
+    let count = 0;
+    const iv = setInterval(()=>{
+      let g = '';
+      for(let i=0;i<target.length;i++){
+        g += Math.random()<0.35
+          ? glitchChars[Math.floor(Math.random()*glitchChars.length)]
+          : target[i];
+      }
+      el.textContent = g;
+      if(++count > 6){ clearInterval(iv); el.textContent = target; cb && cb(); }
+    }, 40);
+  }
+
+  function type(){
+    const phrase = phrases[pi];
+    if(!deleting){
+      if(ci <= phrase.length){
+        el.textContent = phrase.slice(0, ci++);
+        setTimeout(type, ci === phrase.length ? 1800 : 55);
+      } else { deleting = true; setTimeout(type, 400); }
+    } else {
+      if(ci >= 0){
+        el.textContent = phrase.slice(0, ci--);
+        setTimeout(type, 28);
+      } else {
+        deleting = false;
+        pi = (pi+1) % phrases.length; ci = 0;
+        glitch('', ()=>setTimeout(type, 200));
+      }
+    }
+  }
+  setTimeout(type, 1200);
+})();
+
+// Particles
+(function(){
+  const landing=document.getElementById('landing');
+  const colors=['rgba(0,255,136,0.6)','rgba(0,212,255,0.5)','rgba(0,255,136,0.35)'];
+  for(let i=0;i<20;i++){
+    const p=document.createElement('div');p.className='particle';
+    const s=Math.random()*5+3;
+    p.style.cssText=`width:${s}px;height:${s}px;left:${Math.random()*100}%;background:${colors[Math.floor(Math.random()*colors.length)]};animation-duration:${Math.random()*9+7}s;animation-delay:${Math.random()*9}s;box-shadow:0 0 ${s*2}px rgba(0,255,136,0.5);`;
+    landing.appendChild(p);
+  }
+})();
+
+function goToApp(){
+  const l=document.getElementById('landing'),a=document.getElementById('app');
+  l.style.transition='opacity 0.5s,transform 0.5s';l.style.opacity='0';l.style.transform='translateY(-20px)';
+  setTimeout(()=>{l.style.display='none';a.style.display='block';a.style.animation='fadeIn 0.4s ease both';showAppPage('ap-upload');},440);
+}
+function backToLanding(){
+  const l=document.getElementById('landing'),a=document.getElementById('app');
+  a.style.display='none';l.style.display='';l.style.opacity='0';l.style.transform='translateY(-20px)';l.style.transition='opacity 0.5s,transform 0.5s';
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{l.style.opacity='1';l.style.transform='translateY(0)';}));
+}
+function switchTab(tab){
+  currentTab=tab;
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active',(i===0&&tab==='file')||(i===1&&tab==='url')));
+  document.getElementById('drop-zone').style.display=tab==='file'?'block':'none';
+  document.getElementById('url-zone').classList.toggle('active',tab==='url');
+}
+function handleDragOver(e){e.preventDefault();document.getElementById('drop-zone').classList.add('dragover');}
+function handleDragLeave(){document.getElementById('drop-zone').classList.remove('dragover');}
+function handleDrop(e){e.preventDefault();document.getElementById('drop-zone').classList.remove('dragover');const f=e.dataTransfer.files[0];if(f&&f.type.startsWith('video/'))setFile(f);}
+function handleFileSelect(e){const f=e.target.files[0];if(f)setFile(f);}
+function setFile(f){currentFile=f;document.getElementById('file-pill').classList.add('show');document.getElementById('file-name').textContent=f.name;document.getElementById('analyze-btn').disabled=false;}
+function showAppPage(id){document.querySelectorAll('.app-page').forEach(p=>p.classList.remove('active'));document.getElementById(id).classList.add('active');}
+
+async function startAnalysis(type){
+  showAppPage('ap-loading');animateSteps();
+  try{
+    let res;
+    if(type==='file'){const fd=new FormData();fd.append('video',currentFile);res=await fetch(API_URL,{method:'POST',body:fd});}
+    else{const url=document.getElementById('url-input').value.trim();if(!url){showAppPage('ap-upload');return;}res=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});}
+    if(!res.ok)throw new Error('Server connection failed');
+    const data=await res.json();
+    showResult(data,type==='file'?currentFile?.name:'Video URL');
+  }catch(err){showError(err.message);}
+}
+function animateSteps(){
+  const ids=['s1','s2','s3','s4'];let i=0;
+  const check='<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20,6 9,17 4,12"/></svg>';
+  function next(){
+    if(i>0){document.getElementById(ids[i-1]).classList.remove('active');document.getElementById(ids[i-1]).classList.add('done');document.getElementById(ids[i-1]).querySelector('.step-ico').innerHTML=check;}
+    if(i<ids.length){document.getElementById(ids[i]).classList.add('active');i++;setTimeout(next,1800);}
+  }
+  next();
+}
+function showResult(data,fname){
+  const raw=(data.result||data.label||'').toLowerCase();
+  const isReal=raw==='real';
+  const conf=Math.round((data.confidence??data.score??0.5)*100);
+  const frames=data.frames_analyzed||data.frames||'—';
+  const time=data.processing_time?data.processing_time.toFixed(1)+'s':'—';
+  document.getElementById('ap-result').innerHTML=`
+    <div class="result-card">
+      <div class="result-top">
+        <div class="verdict-badge ${isReal?'v-real':'v-fake'}">
+          ${isReal?'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20,6 9,17 4,12"/></svg>':'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'}
+          ${isReal?'AUTHENTIC':'DEEPFAKE'}
+        </div>
+        <div class="result-fname">${fname||'Analyzed Video'}</div>
+      </div>
+      <div class="result-body">
+        <div>
+          <div class="conf-row"><span>Confidence Score</span><span class="conf-val">${conf}%</span></div>
+          <div class="conf-track"><div class="conf-fill ${isReal?'fill-real':'fill-fake'}" id="cbar" style="width:0%"></div></div>
+        </div>
+        <div class="detail-grid">
+          <div class="d-item"><div class="d-lbl">Verdict</div><div class="d-val" style="color:${isReal?'var(--neon)':'var(--neon3)'}">${isReal?'Real ✓':'Fake ✗'}</div></div>
+          <div class="d-item"><div class="d-lbl">Confidence</div><div class="d-val">${conf}%</div></div>
+          <div class="d-item"><div class="d-lbl">Frames</div><div class="d-val">${frames}</div></div>
+          <div class="d-item"><div class="d-lbl">Processing</div><div class="d-val">${time}</div></div>
+        </div>
+      </div>
+      <div class="result-actions">
+        <button class="btn-out" onclick="resetApp()">New Analysis</button>
+        <button class="btn-grad" onclick='downloadReport(${JSON.stringify({isReal,conf,fname,frames,time}).replace(/"/g,"&quot;")})'>Download Report</button>
+      </div>
+    </div>`;
+  showAppPage('ap-result');
+  setTimeout(()=>{const b=document.getElementById('cbar');if(b)b.style.width=conf+'%';},100);
+}
+function showError(msg){
+  document.getElementById('ap-result').innerHTML=`<div class="err-card"><h3>// ERROR</h3><p>${msg||'Could not connect to server. Make sure Flask is running on port 5000.'}</p><button class="btn-primary" onclick="resetApp()" style="width:auto;padding:0.7rem 1.8rem;margin-top:0">Retry</button></div>`;
+  showAppPage('ap-result');
+}
+function resetApp(){
+  currentFile=null;document.getElementById('file-input').value='';document.getElementById('file-pill').classList.remove('show');document.getElementById('analyze-btn').disabled=true;document.getElementById('url-input').value='';
+  ['s1','s2','s3','s4'].forEach((id,i)=>{const el=document.getElementById(id);el.className='step';el.querySelector('.step-ico').textContent=i+1;});
+  switchTab('file');showAppPage('ap-upload');
+}
+function downloadReport(d){
+  const txt=`DeepVerify — Analysis Report\n${'='.repeat(34)}\nFile: ${d.fname}\nVerdict: ${d.isReal?'AUTHENTIC (Real)':'DEEPFAKE (Fake)'}\nConfidence: ${d.conf}%\nFrames Analyzed: ${d.frames}\nProcessing Time: ${d.time}\nDate: ${new Date().toLocaleString('en')}\n`;
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain;charset=utf-8'}));a.download='deepverify-report.txt';a.click();
+}
+</script>
+</body>
+</html>
